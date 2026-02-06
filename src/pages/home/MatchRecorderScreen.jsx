@@ -21,9 +21,9 @@ import {
   UserPlus,
   Play,
 } from "@phosphor-icons/react";
-import { logEvent } from "firebase/analytics";
+//import { logEvent } from "firebase/analytics";
 import { usePostHog } from "posthog-js/react";
-import { analytics } from "../../firebase";
+//import { analytics } from "../../firebase";
 
 import Timeline from "../../components/Timeline";
 import Statistics from "../../components/Statistics";
