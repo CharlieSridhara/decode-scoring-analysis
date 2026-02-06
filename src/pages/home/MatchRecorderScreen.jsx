@@ -142,16 +142,18 @@ function MatchRecorderScreen({
       }
     };
   }, []);
-
+  
   const { keyEntry, keyEntryVisible } = useKeyboardCycleEntry({
     enabled: isRecording,
     blocked: showCycleModal,
     elapsedTime,
     mode,
     phase,
-    onAddCycle: ({ total, scored }) => recorder.addCycle({ total, scored }),
+    onAddCycle: ({ total, scored, overflow }) =>
+      recorder.addCycle({ total, scored, overflow }),
     onAddGate: () => recorder.addGate(),
   });
+
 
   const totalScored = useMemo(() => {
     return events
