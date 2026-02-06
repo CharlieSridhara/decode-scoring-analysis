@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { logEvent } from "firebase/analytics";
-import { analytics } from "../firebase";
+
+// 🔴 REMOVE firebase imports completely
+// import { logEvent } from "firebase/analytics";
+// import { analytics } from "../firebase";
 
 import SplashScreen from "./home/SplashScreen";
 import TextImportModal from "../components/home/modals/TextImportModal";
@@ -14,6 +16,7 @@ import { setPath } from "../utils/navigation";
 function HomePage() {
   const recorder = useMatchRecorderContext();
   const { applyParsedMatchData } = recorder;
+
   const [showTextImport, setShowTextImport] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [isLoadingFromUrl, setIsLoadingFromUrl] = useState(false);
@@ -24,21 +27,21 @@ function HomePage() {
       const parsedData = parseMatchText(textInput);
       const success = applyParsedMatchData(parsedData);
       if (!success) {
-        alert("No valid match data found. Please check the format.");
+        alert("No valid match data found.");
         return;
       }
 
       setShowTextImport(false);
       setTextInput("");
-      logEvent(analytics, "import_match_text");
     } catch (e) {
-      alert("Error parsing match data. Please check the format." + e.message);
+      alert("Error parsing match data: " + e.message);
     }
   };
 
   const importMatchFromJson = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     try {
       const data = await readJsonFile(file);
       applyParsedMatchData({
@@ -48,18 +51,8 @@ function HomePage() {
         notes: data.notes,
         teamNumber: data.teamNumber,
       });
-
-      logEvent(analytics, "import_match_json", {
-        numEvents: (data.events || []).length,
-        totalScored: (data.events || [])
-          .filter((ev) => ev.type === "cycle")
-          .reduce((sum, ev) => sum + ev.scored, 0),
-        totalBalls: (data.events || [])
-          .filter((ev) => ev.type === "cycle")
-          .reduce((sum, ev) => sum + ev.total, 0),
-      });
     } catch {
-      alert("Error loading match file. Please ensure it is a valid JSON file.");
+      alert("Invalid JSON match file.");
     }
   };
 
@@ -73,18 +66,12 @@ function HomePage() {
 
       if (!pasteKey && !encoded) return;
 
-      // Show loading splash
       setIsLoadingFromUrl(true);
-      setLoadingMessage(pasteKey ? "Fetching shared match..." : "Decoding match data...");
-
-      // Add a minimum delay for the animation to be visible
-      const minDelay = new Promise(resolve => setTimeout(resolve, 1500));
+      const minDelay = new Promise((r) => setTimeout(r, 1200));
 
       try {
         let decoded;
-
         if (pasteKey) {
-          setLoadingMessage("Fetching shared match...");
           const b64Payload = await readPaste(pasteKey);
           decoded = atob(b64Payload);
         } else {
@@ -93,71 +80,38 @@ function HomePage() {
 
         if (cancelled) return;
 
-        setLoadingMessage("Processing match data...");
         const parsedData = parseMatchText(decoded);
-
-        // Wait for minimum animation time
         await minDelay;
 
-        if (cancelled) return;
-
-        const success = applyParsedMatchData(parsedData);
-        if (success) {
-          logEvent(
-            analytics,
-            pasteKey ? "import_match_text_paste" : "import_match_text_url"
-          );
-
-          // Switch to the match recorder page and clear query params.
+        if (!cancelled) {
+          applyParsedMatchData(parsedData);
           setPath("/match", { replace: true });
         }
       } catch (e) {
-        console.warn("Failed to import match from URL", e);
+        console.warn("Failed to import from URL", e);
         await minDelay;
       } finally {
-        if (!cancelled) {
-          setIsLoadingFromUrl(false);
-        }
+        if (!cancelled) setIsLoadingFromUrl(false);
       }
     };
 
     importFromQuery();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => (cancelled = true);
   }, [applyParsedMatchData]);
 
-  // Show loading splash when loading from URL
   if (isLoadingFromUrl) {
     return <LoadingSplash message={loadingMessage} />;
   }
 
   return (
     <div className="page">
-      <div className="bg" aria-hidden="true" />
-      <div className="content min-h-screen p-4 sm:p-8 max-w-7xl mx-auto flex flex-col justify-center items-center gap-6 sm:gap-12">
-        <div className="w-full text-center sm:text-left max-w-4xl">
-          <div className="pill mb-4 w-48 border-brand-accentStrong border text-center justify-center sm:justify-start">Over <span className="font-bold">750 matches</span> recorded!</div>
-          <h1 className="title">
-            <span className="fancy">
-              Data-Based
-            </span>
-            &nbsp;Match Recording and Scouting
-          </h1>
-          <p className="subtitle mt-3">
-            OPR can't lie if you don&apos;t use it. Track performance over time and compare teams for the FTC <i>DECODE</i> season with Heron Scout.
-            Start a match to begin recording, or import existing data!
-          </p>
-        </div>
-
-        <div className="w-full p-4 sm:p-6">
-          <SplashScreen
-            recorder={recorder}
-            onImportJson={importMatchFromJson}
-            onOpenTextImport={() => setShowTextImport(true)}
-          />
-        </div>
+      <div className="bg" aria-hidden />
+      <div className="content min-h-screen p-6 max-w-7xl mx-auto flex flex-col items-center gap-10">
+        <SplashScreen
+          recorder={recorder}
+          onImportJson={importMatchFromJson}
+          onOpenTextImport={() => setShowTextImport(true)}
+        />
 
         <TextImportModal
           open={showTextImport}
