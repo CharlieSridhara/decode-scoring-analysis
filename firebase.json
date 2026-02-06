@@ -1,13 +1,29 @@
-{
-  "hosting": {
-    "public": "dist",
-    "cleanUrls": true,
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+// src/firebase.js
+import { initializeApp } from "firebase/app";
+import { getAnalytics, isSupported } from "firebase/analytics";
+
+/**
+ * ⚠️ Replace these with YOUR Firebase project values
+ * If you don’t care about analytics yet, this still works safely.
+ */
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME",
+  measurementId: "REPLACE_ME",
+};
+
+const app = initializeApp(firebaseConfig);
+
+// Analytics is optional + browser-safe
+let analytics = null;
+isSupported().then((supported) => {
+  if (supported) {
+    analytics = getAnalytics(app);
   }
-}
+});
+
+export { app, analytics };
