@@ -9,26 +9,48 @@ export default function useKeyboardCycleEntry({
   onAddCycle,
   onAddGate,
 }) {
-  const [keyEntry, setKeyEntry] = useState({ total: null, scored: null });
+  const [keyEntry, setKeyEntry] = useState({
+    total: null,
+    scored: null,
+    overflow: 0,
+    overflowMode: false,
+  });
+
   const [keyEntryVisible, setKeyEntryVisible] = useState(false);
   const [keyEntryExpiresAt, setKeyEntryExpiresAt] = useState(null);
 
   const expireTimeoutRef = useRef(null);
 
+  // =====================
+  // Helpers
+  // =====================
+  const resetEntry = () => {
+    setKeyEntry({
+      total: null,
+      scored: null,
+      overflow: 0,
+      overflowMode: false,
+    });
+    setKeyEntryVisible(false);
+    setKeyEntryExpiresAt(null);
+  };
+
+  // =====================
+  // Expiration timer
+  // =====================
   useEffect(() => {
     if (expireTimeoutRef.current) {
       clearTimeout(expireTimeoutRef.current);
       expireTimeoutRef.current = null;
     }
+
     if (keyEntryVisible && keyEntryExpiresAt) {
       const ms = Math.max(0, keyEntryExpiresAt - Date.now());
       expireTimeoutRef.current = setTimeout(() => {
-        setKeyEntry({ total: null, scored: null });
-        setKeyEntryVisible(false);
-        setKeyEntryExpiresAt(null);
-        // setCooldownUntil(Date.now() + 5000);
+        resetEntry();
       }, ms);
     }
+
     return () => {
       if (expireTimeoutRef.current) {
         clearTimeout(expireTimeoutRef.current);
@@ -37,10 +59,12 @@ export default function useKeyboardCycleEntry({
     };
   }, [keyEntryVisible, keyEntryExpiresAt]);
 
+  // =====================
+  // Keyboard handling
+  // =====================
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (!enabled) return;
-      if (blocked) return;
+      if (!enabled || blocked) return;
 
       const ae = document.activeElement;
       if (
@@ -54,8 +78,11 @@ export default function useKeyboardCycleEntry({
 
       const now = Date.now();
 
+      // ---------------------
+      // No active entry
+      // ---------------------
       if (!keyEntryVisible) {
-        if (e.key && e.key.toLowerCase() === "g") {
+        if (e.key?.toLowerCase() === "g") {
           onAddGate?.({
             timestamp: elapsedTime,
             phase: mode === "match" ? phase : undefined,
@@ -65,7 +92,12 @@ export default function useKeyboardCycleEntry({
         }
 
         if (e.key >= "1" && e.key <= "3") {
-          setKeyEntry({ total: parseInt(e.key, 10), scored: null });
+          setKeyEntry({
+            total: parseInt(e.key, 10),
+            scored: null,
+            overflow: 0,
+            overflowMode: false,
+          });
           setKeyEntryVisible(true);
           setKeyEntryExpiresAt(now + 5000);
           e.preventDefault();
@@ -73,37 +105,76 @@ export default function useKeyboardCycleEntry({
         return;
       }
 
+      // ---------------------
+      // Cancel
+      // ---------------------
       if (e.key === "Escape") {
-        setKeyEntry({ total: null, scored: null });
-        setKeyEntryVisible(false);
-        setKeyEntryExpiresAt(null);
+        resetEntry();
         e.preventDefault();
         return;
       }
 
+      // ---------------------
+      // Commit
+      // ---------------------
       if (e.key === "Enter") {
         if (keyEntry.total != null && keyEntry.scored != null) {
           onAddCycle?.({
             total: keyEntry.total,
             scored: keyEntry.scored,
+            overflow: keyEntry.overflow, // ALWAYS numeric
             timestamp: elapsedTime,
             phase: mode === "match" ? phase : undefined,
           });
-          setKeyEntry({ total: null, scored: null });
-          setKeyEntryVisible(false);
-          setKeyEntryExpiresAt(null);
+          resetEntry();
         }
         e.preventDefault();
         return;
       }
 
+      // ---------------------
+      // Enter overflow mode
+      // ---------------------
+      if (
+        e.key?.toLowerCase() === "o" &&
+        keyEntry.scored != null
+      ) {
+        setKeyEntry((prev) => ({
+          ...prev,
+          overflowMode: true,
+          overflow: 0,
+        }));
+        setKeyEntryExpiresAt(now + 5000);
+        e.preventDefault();
+        return;
+      }
+
+      // ---------------------
+      // Numeric input
+      // ---------------------
       if (e.key >= "0" && e.key <= "9") {
-        if (keyEntry.total != null) {
-          const val = parseInt(e.key, 10);
-          if (val <= keyEntry.total) {
-            setKeyEntry((prev) => ({ ...prev, scored: val }));
-            setKeyEntryExpiresAt(Date.now() + 5000);
+        const val = parseInt(e.key, 10);
+
+        // Overflow input
+        if (keyEntry.overflowMode) {
+          if (val >= 0 && val <= keyEntry.scored) {
+            setKeyEntry((prev) => ({
+              ...prev,
+              overflow: val,
+            }));
+            setKeyEntryExpiresAt(now + 5000);
           }
+          e.preventDefault();
+          return;
+        }
+
+        // Normal scored input
+        if (keyEntry.total != null && val <= keyEntry.total) {
+          setKeyEntry((prev) => ({
+            ...prev,
+            scored: val,
+          }));
+          setKeyEntryExpiresAt(now + 5000);
           e.preventDefault();
         }
       }
@@ -117,22 +188,15 @@ export default function useKeyboardCycleEntry({
     keyEntryVisible,
     keyEntry,
     elapsedTime,
-
     mode,
     phase,
     onAddCycle,
     onAddGate,
   ]);
 
-  const clearKeyEntry = () => {
-    setKeyEntry({ total: null, scored: null });
-    setKeyEntryVisible(false);
-    setKeyEntryExpiresAt(null);
-  };
-
   return {
     keyEntry,
     keyEntryVisible,
-    clearKeyEntry,
+    clearKeyEntry: resetEntry,
   };
 }
