@@ -1,131 +1,63 @@
-import { useEffect, useState } from "react";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.jsx";
+import { TournamentProvider } from "./data/TournamentContext.jsx";
+import { PostHogProvider } from "posthog-js/react";
+import { MatchRecorderProvider } from "./data/MatchRecorderContext.jsx";
+import { AuthProvider } from "./contexts/AuthContext.jsx";
+import { TeamNamesProvider } from "./contexts/TeamNamesContext.jsx";
 
-// 🔴 REMOVE firebase imports completely
-// import { logEvent } from "firebase/analytics";
-// import { analytics } from "../firebase";
-
-import SplashScreen from "./home/SplashScreen";
-import TextImportModal from "../components/home/modals/TextImportModal";
-import LoadingSplash from "../components/home/LoadingSplash";
-import { useMatchRecorderContext } from "../data/MatchRecorderContext";
-import { parseMatchText } from "../utils/matchFormat";
-import { readJsonFile } from "../utils/fileJson";
-import { readPaste } from "../utils/pasteService";
-import { setPath } from "../utils/navigation";
-
-function HomePage() {
-  const recorder = useMatchRecorderContext();
-  const { applyParsedMatchData } = recorder;
-
-  const [showTextImport, setShowTextImport] = useState(false);
-  const [textInput, setTextInput] = useState("");
-  const [isLoadingFromUrl, setIsLoadingFromUrl] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("Loading match data...");
-
-  const importFromText = () => {
-    try {
-      const parsedData = parseMatchText(textInput);
-      const success = applyParsedMatchData(parsedData);
-      if (!success) {
-        alert("No valid match data found.");
-        return;
-      }
-
-      setShowTextImport(false);
-      setTextInput("");
-    } catch (e) {
-      alert("Error parsing match data: " + e.message);
-    }
-  };
-
-  const importMatchFromJson = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const data = await readJsonFile(file);
-      applyParsedMatchData({
-        startTime: data.startTime,
-        duration: data.duration,
-        events: data.events,
-        notes: data.notes,
-        teamNumber: data.teamNumber,
-      });
-    } catch {
-      alert("Invalid JSON match file.");
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const importFromQuery = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const pasteKey = params.get("p");
-      const encoded = params.get("mt");
-
-      if (!pasteKey && !encoded) return;
-
-      setIsLoadingFromUrl(true);
-      const minDelay = new Promise((r) => setTimeout(r, 1200));
-
-      try {
-        let decoded;
-        if (pasteKey) {
-          const b64Payload = await readPaste(pasteKey);
-          decoded = atob(b64Payload);
-        } else {
-          decoded = atob(decodeURIComponent(encoded));
-        }
-
-        if (cancelled) return;
-
-        const parsedData = parseMatchText(decoded);
-        await minDelay;
-
-        if (!cancelled) {
-          applyParsedMatchData(parsedData);
-          setPath("/match", { replace: true });
-        }
-      } catch (e) {
-        console.warn("Failed to import from URL", e);
-        await minDelay;
-      } finally {
-        if (!cancelled) setIsLoadingFromUrl(false);
-      }
-    };
-
-    importFromQuery();
-    return () => (cancelled = true);
-  }, [applyParsedMatchData]);
-
-  if (isLoadingFromUrl) {
-    return <LoadingSplash message={loadingMessage} />;
-  }
-
-  return (
-    <div className="page">
-      <div className="bg" aria-hidden />
-      <div className="content min-h-screen p-6 max-w-7xl mx-auto flex flex-col items-center gap-10">
-        <SplashScreen
-          recorder={recorder}
-          onImportJson={importMatchFromJson}
-          onOpenTextImport={() => setShowTextImport(true)}
-        />
-
-        <TextImportModal
-          open={showTextImport}
-          textInput={textInput}
-          setTextInput={setTextInput}
-          onImport={importFromText}
-          onClose={() => {
-            setShowTextImport(false);
-            setTextInput("");
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-export default HomePage;
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <PostHogProvider
+      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
+      options={{
+        api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+        defaults: "2025-05-24",
+        capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
+        debug: import.meta.env.MODE === "development",
+        person_profiles: "always",
+      }}
+    >
+      <TournamentProvider>
+        <MatchRecorderProvider>
+          <AuthProvider>
+            <TeamNamesProvider>
+              <App />
+            </TeamNamesProvider>
+          </AuthProvider>
+          <footer className="text-center text-sm text-brand-accent my-4">
+            <div className="w-full flex flex-row justify-center items-center gap-2">
+              <p className="font-semibold">
+                <img
+                  src="https://heronrobotics.vercel.app/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fheronlogo.b712bcb0.png&w=828&q=75"
+                  className="inline-block w-6 h-6 mx-2"
+                />{" "}
+                Heron Robotics, FTC 27621. &copy; 2025. All rights reserved.
+              </p>
+              <a
+                href="https://heronscout.me/privacy"
+                className="block underline"
+              >
+                Privacy Policy
+              </a>
+            </div>
+            <div className="text-sm">
+              Made with late nights and free time —{" "}
+              <a
+                className="underline"
+                href="https://github.com/HeronRobotics/decode-scoring-analysis"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Contribute on GitHub
+              </a>
+              !
+            </div>
+          </footer>
+        </MatchRecorderProvider>
+      </TournamentProvider>
+    </PostHogProvider>
+  </StrictMode>,
+);
